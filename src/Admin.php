@@ -46,14 +46,100 @@ class Admin {
         return $reports;
     }
 
-    public function blockUser($userId) {
-        $stmt = $this->pdo->prepare("UPDATE users SET is_blocked = 1 WHERE id = ?");
-        return $stmt->execute([$userId]);
+    public function blockUser($userId, $adminId = null, $banIpAndEmail = true) {
+        try {
+            $this->pdo->beginTransaction();
+            
+            // Block the user account
+            $stmt = $this->pdo->prepare("UPDATE users SET is_blocked = 1 WHERE id = ?");
+            $stmt->execute([$userId]);
+            
+            // If admin wants to ban IP and email
+            if ($banIpAndEmail && $adminId) {
+                // Get user's IP and email_hash
+                $stmt = $this->pdo->prepare("SELECT registration_ip, email_hash FROM users WHERE id = ?");
+                $stmt->execute([$userId]);
+                $user = $stmt->fetch();
+                
+                if ($user) {
+                    // Ban the IP if available
+                    if (!empty($user['registration_ip'])) {
+                        $this->banIdentifier('ip', $user['registration_ip'], $userId, $adminId);
+                    }
+                    
+                    // Ban the email hash
+                    if (!empty($user['email_hash'])) {
+                        $this->banIdentifier('email_hash', $user['email_hash'], $userId, $adminId);
+                    }
+                }
+            }
+            
+            $this->pdo->commit();
+            return true;
+        } catch (Exception $e) {
+            $this->pdo->rollBack();
+            error_log("Error blocking user: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    public function banIdentifier($type, $value, $bannedUserId, $adminId, $reason = null) {
+        try {
+            $stmt = $this->pdo->prepare(
+                "INSERT IGNORE INTO banned_identifiers (type, value, banned_user_id, banned_by_admin_id, reason) 
+                 VALUES (?, ?, ?, ?, ?)"
+            );
+            return $stmt->execute([$type, $value, $bannedUserId, $adminId, $reason]);
+        } catch (Exception $e) {
+            error_log("Error banning identifier: " . $e->getMessage());
+            return false;
+        }
     }
 
-    public function unblockUser($userId) {
-        $stmt = $this->pdo->prepare("UPDATE users SET is_blocked = 0 WHERE id = ?");
-        return $stmt->execute([$userId]);
+    public function unblockUser($userId, $unbanIpAndEmail = true) {
+        try {
+            $this->pdo->beginTransaction();
+            
+            // Unblock the user account
+            $stmt = $this->pdo->prepare("UPDATE users SET is_blocked = 0 WHERE id = ?");
+            $stmt->execute([$userId]);
+            
+            // Remove IP and email bans if requested
+            if ($unbanIpAndEmail) {
+                // Get user's IP and email_hash
+                $stmt = $this->pdo->prepare("SELECT registration_ip, email_hash FROM users WHERE id = ?");
+                $stmt->execute([$userId]);
+                $user = $stmt->fetch();
+                
+                if ($user) {
+                    // Remove IP ban
+                    if (!empty($user['registration_ip'])) {
+                        $stmt = $this->pdo->prepare("DELETE FROM banned_identifiers WHERE type = 'ip' AND value = ?");
+                        $stmt->execute([$user['registration_ip']]);
+                    }
+                    
+                    // Remove email hash ban
+                    if (!empty($user['email_hash'])) {
+                        $stmt = $this->pdo->prepare("DELETE FROM banned_identifiers WHERE type = 'email_hash' AND value = ?");
+                        $stmt->execute([$user['email_hash']]);
+                    }
+                }
+            }
+            
+            $this->pdo->commit();
+            return true;
+        } catch (Exception $e) {
+            $this->pdo->rollBack();
+            error_log("Error unblocking user: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    public static function isIdentifierBanned($type, $value) {
+        $pdo = Database::getInstance()->getConnection();
+        $stmt = $pdo->prepare("SELECT id FROM banned_identifiers WHERE type = ? AND value = ?");
+        $stmt->execute([$type, $value]);
+        return $stmt->fetch() !== false;
     }
 
     public function deleteReport($reportId) {

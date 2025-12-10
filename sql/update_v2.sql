@@ -46,6 +46,25 @@ CREATE TABLE IF NOT EXISTS blocked_users (
 );
 
 -- =============================================
--- Note: Les erreurs "Duplicate column" sont normales
--- si les colonnes existent déjà
+-- Créer la table banned_identifiers si elle n'existe pas
+-- Pour bannir les IP et emails des utilisateurs bloqués
+-- =============================================
+CREATE TABLE IF NOT EXISTS banned_identifiers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    type ENUM('ip', 'email_hash') NOT NULL,
+    value VARCHAR(255) NOT NULL,
+    banned_user_id INT DEFAULT NULL,
+    banned_by_admin_id INT NOT NULL,
+    reason TEXT DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_ban (type, value),
+    FOREIGN KEY (banned_by_admin_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Index pour recherche rapide des bans
+CREATE INDEX idx_banned_type_value ON banned_identifiers(type, value);
+
+-- =============================================
+-- Note: Les erreurs "Duplicate column" ou "Table exists" 
+-- sont normales si déjà appliqué
 -- =============================================

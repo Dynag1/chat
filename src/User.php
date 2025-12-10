@@ -16,8 +16,24 @@ class User {
     }
 
     public function register($username, $email, $password, $ip = null) {
+        // Get registration IP if not provided
+        if ($ip === null) {
+            $ip = $this->getClientIP();
+        }
+        
+        // Check if IP is banned
+        if ($this->isIdentifierBanned('ip', $ip)) {
+            return ['success' => false, 'message' => 'Inscription impossible. Contactez l\'administrateur.'];
+        }
+        
         // Check if email already exists (using hash)
         $emailHash = hash('sha256', $email);
+        
+        // Check if email is banned
+        if ($this->isIdentifierBanned('email_hash', $emailHash)) {
+            return ['success' => false, 'message' => 'Inscription impossible. Contactez l\'administrateur.'];
+        }
+        
         $stmt = $this->pdo->prepare("SELECT id FROM users WHERE email_hash = ?");
         $stmt->execute([$emailHash]);
         if ($stmt->fetch()) {
@@ -31,11 +47,6 @@ class User {
         // Generate verification token
         $verificationToken = bin2hex(random_bytes(32));
         $verificationExpires = date('Y-m-d H:i:s', strtotime('+24 hours'));
-        
-        // Get registration IP if not provided
-        if ($ip === null) {
-            $ip = $this->getClientIP();
-        }
 
         $stmt = $this->pdo->prepare(
             "INSERT INTO users (username, email, email_hash, password_hash, verification_token, verification_expires, registration_ip) 
@@ -310,5 +321,16 @@ class User {
         }
         
         return ['success' => false, 'message' => 'Une erreur s\'est produite. Veuillez réessayer.'];
+    }
+    
+    private function isIdentifierBanned($type, $value) {
+        try {
+            $stmt = $this->pdo->prepare("SELECT id FROM banned_identifiers WHERE type = ? AND value = ?");
+            $stmt->execute([$type, $value]);
+            return $stmt->fetch() !== false;
+        } catch (Exception $e) {
+            // Table might not exist yet, ignore error
+            return false;
+        }
     }
 }

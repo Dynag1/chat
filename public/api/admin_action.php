@@ -11,20 +11,29 @@ if (!isset($_SESSION['user_id']) || !isset($_SESSION['is_admin']) || !$_SESSION[
 
 $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? '';
+$adminId = $_SESSION['user_id'];
 $admin = new Admin();
 
 try {
     switch ($action) {
         case 'block':
             if (!isset($input['user_id'])) throw new Exception('User ID required');
-            $success = $admin->blockUser($input['user_id']);
-            echo json_encode(['success' => $success]);
+            // Block user and ban their IP + email
+            $success = $admin->blockUser($input['user_id'], $adminId, true);
+            echo json_encode([
+                'success' => $success, 
+                'message' => $success ? 'Utilisateur bloqué. IP et email bannis.' : 'Erreur lors du blocage.'
+            ]);
             break;
             
         case 'unblock':
             if (!isset($input['user_id'])) throw new Exception('User ID required');
-            $success = $admin->unblockUser($input['user_id']);
-            echo json_encode(['success' => $success]);
+            // Unblock user and remove IP + email bans
+            $success = $admin->unblockUser($input['user_id'], true);
+            echo json_encode([
+                'success' => $success,
+                'message' => $success ? 'Utilisateur débloqué. Bans IP/email retirés.' : 'Erreur lors du déblocage.'
+            ]);
             break;
             
         case 'dismiss':

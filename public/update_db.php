@@ -26,6 +26,21 @@ $migrations = [
         'sql' => "ALTER TABLE reports ADD COLUMN chat_id INT DEFAULT NULL",
         'check' => "SHOW COLUMNS FROM reports LIKE 'chat_id'"
     ],
+    // Migration 5: Create banned_identifiers table
+    [
+        'name' => 'create_banned_identifiers_table',
+        'sql' => "CREATE TABLE IF NOT EXISTS banned_identifiers (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            type ENUM('ip', 'email_hash') NOT NULL,
+            value VARCHAR(255) NOT NULL,
+            banned_user_id INT DEFAULT NULL,
+            banned_by_admin_id INT NOT NULL,
+            reason TEXT DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_ban (type, value)
+        )",
+        'check' => "SHOW TABLES LIKE 'banned_identifiers'"
+    ],
 ];
 
 try {
