@@ -55,7 +55,15 @@ try {
             
             $reportedId = filter_var($input['reported_id'], FILTER_VALIDATE_INT);
             $reason = Security::sanitizeInput($input['reason']);
-            $chatId = isset($input['chat_id']) ? filter_var($input['chat_id'], FILTER_VALIDATE_INT) : null;
+            
+            // Get chat_id - ensure it's a valid int or null
+            $chatId = null;
+            if (isset($input['chat_id']) && $input['chat_id'] !== null && $input['chat_id'] !== '') {
+                $chatId = filter_var($input['chat_id'], FILTER_VALIDATE_INT);
+                if ($chatId === false) $chatId = null;
+            }
+            
+            error_log("Report request - reported_id: $reportedId, chat_id: " . ($chatId ?? 'null'));
             
             if (!$reportedId || empty($reason)) {
                 http_response_code(400);

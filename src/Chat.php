@@ -150,19 +150,44 @@ class Chat {
     }
 
     public function reportUser($reporterId, $reportedId, $reason, $chatId = null) {
-        $encryptedReason = $this->encryption->encrypt($reason);
-        
-        // Get conversation snapshot if chatId is provided
-        $conversationSnapshot = null;
-        if ($chatId) {
-            $messages = $this->getAllChatMessages($chatId);
-            if (!empty($messages)) {
-                $conversationSnapshot = $this->encryption->encrypt(json_encode($messages, JSON_UNESCAPED_UNICODE));
+        try {
+            $encryptedReason = $this->encryption->encrypt($reason);
+            
+            // Get conversation snapshot if chatId is provided
+            $conversationSnapshot = null;
+            if ($chatId) {
+                error_log("Getting messages for chat_id: $chatId");
+                $messages = $this->getAllChatMessages($chatId);
+                error_log("Found " . count($messages) . " messages");
+                if (!empty($messages)) {
+                    $conversationSnapshot = $this->encryption->encrypt(json_encode($messages, JSON_UNESCAPED_UNICODE));
+                    error_log("Conversation snapshot created, length: " . strlen($conversationSnapshot));
+                }
+            } else {
+                error_log("No chat_id provided for report");
             }
+            
+            // Check if columns exist (for backwards compatibility)
+            $stmt = $this->pdo->prepare("SHOW COLUMNS FROM reports LIKE 'conversation_snapshot'");
+            $stmt->execute();
+            $hasConversationColumn = $stmt->fetch() !== false;
+            
+            if ($hasConversationColumn) {
+                $stmt = $this->pdo->prepare("INSERT INTO reports (reporter_id, reported_id, reason, conversation_snapshot, chat_id) VALUES (?, ?, ?, ?, ?)");
+                $result = $stmt->execute([$reporterId, $reportedId, $encryptedReason, $conversationSnapshot, $chatId]);
+            } else {
+                // Fallback if columns don't exist yet
+                error_log("Warning: conversation_snapshot column doesn't exist. Run the migration.");
+                $stmt = $this->pdo->prepare("INSERT INTO reports (reporter_id, reported_id, reason) VALUES (?, ?, ?)");
+                $result = $stmt->execute([$reporterId, $reportedId, $encryptedReason]);
+            }
+            
+            error_log("Report saved: " . ($result ? 'success' : 'failed'));
+            return $result;
+        } catch (Exception $e) {
+            error_log("Error in reportUser: " . $e->getMessage());
+            return false;
         }
-        
-        $stmt = $this->pdo->prepare("INSERT INTO reports (reporter_id, reported_id, reason, conversation_snapshot, chat_id) VALUES (?, ?, ?, ?, ?)");
-        return $stmt->execute([$reporterId, $reportedId, $encryptedReason, $conversationSnapshot, $chatId]);
     }
     
     public function getAllChatMessages($chatId) {
