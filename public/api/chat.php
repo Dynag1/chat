@@ -105,7 +105,7 @@ try {
         } elseif ($action === 'find_match') {
             // Rate limiting for match finding
             $rateLimitKey = 'find_match_' . $userId;
-            if (!Security::checkRateLimit($rateLimitKey, 10, 60)) {
+            if (!Security::checkRateLimit($rateLimitKey, 60, 60)) {
                 http_response_code(429);
                 echo json_encode(['success' => false, 'message' => 'Too many match requests. Please wait.']);
                 exit;

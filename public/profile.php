@@ -20,7 +20,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $action = $_POST['action'] ?? '';
         
-        if ($action === 'update_email') {
+        if ($action === 'update_intent') {
+            $intent = $_POST['intent'];
+            $result = $user->updateIntent($_SESSION['user_id'], $intent);
+            $message = $result['message'];
+            $messageType = $result['success'] ? 'success' : 'error';
+            if ($result['success']) {
+                $userData = $user->getUser($_SESSION['user_id']);
+            }
+        } elseif ($action === 'update_email') {
             $newEmail = Security::sanitizeInput($_POST['email']);
             $password = $_POST['password'];
             
@@ -169,6 +177,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?php echo htmlspecialchars($message); ?>
             </div>
         <?php endif; ?>
+
+        <!-- Update Intent -->
+        <div class="profile-section">
+            <h3>Mon Intention</h3>
+            <p>Que souhaitez-vous faire sur Atypi Chat ?</p>
+            <form action="" method="POST">
+                <input type="hidden" name="action" value="update_intent">
+                <?php echo Security::getCSRFInput(); ?>
+                
+                <div class="form-group">
+                    <label>Je suis ici pour :</label>
+                    <select name="intent" style="width: 100%; padding: 10px; border: 1px solid #dfe6e9; border-radius: 4px;">
+                        <option value="discuter" <?php echo ($userData['intent'] ?? 'discuter') === 'discuter' ? 'selected' : ''; ?>>Discuter simplement</option>
+                        <option value="aider" <?php echo ($userData['intent'] ?? 'discuter') === 'aider' ? 'selected' : ''; ?>>Aider quelqu'un</option>
+                        <option value="besoin_aide" <?php echo ($userData['intent'] ?? 'discuter') === 'besoin_aide' ? 'selected' : ''; ?>>J'ai besoin d'aide</option>
+                    </select>
+                </div>
+                <button type="submit">Mettre à jour mon intention</button>
+            </form>
+        </div>
 
         <!-- Update Email -->
         <div class="profile-section">

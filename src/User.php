@@ -15,7 +15,7 @@ class User {
         $this->encryption = new Encryption();
     }
 
-    public function register($username, $email, $password) {
+    public function register($username, $email, $password, $ip = null) {
         // Check if email already exists (using hash)
         $emailHash = hash('sha256', $email);
         $stmt = $this->pdo->prepare("SELECT id FROM users WHERE email_hash = ?");
@@ -31,10 +31,15 @@ class User {
         // Generate verification token
         $verificationToken = bin2hex(random_bytes(32));
         $verificationExpires = date('Y-m-d H:i:s', strtotime('+24 hours'));
+        
+        // Get registration IP if not provided
+        if ($ip === null) {
+            $ip = $this->getClientIP();
+        }
 
         $stmt = $this->pdo->prepare(
-            "INSERT INTO users (username, email, email_hash, password_hash, verification_token, verification_expires) 
-             VALUES (?, ?, ?, ?, ?, ?)"
+            "INSERT INTO users (username, email, email_hash, password_hash, verification_token, verification_expires, registration_ip) 
+             VALUES (?, ?, ?, ?, ?, ?, ?)"
         );
         
         if ($stmt->execute([
@@ -43,7 +48,8 @@ class User {
             $emailHash, 
             $passwordHash,
             $verificationToken,
-            $verificationExpires
+            $verificationExpires,
+            $ip
         ])) {
             // Send verification email
             $emailService = new Email();
@@ -109,6 +115,10 @@ class User {
             $user['email'] = $this->encryption->decrypt($user['email']);
             unset($user['password_hash']);
             unset($user['email_hash']);
+            // Ensure intent is set (handle legacy records if any)
+            if (!isset($user['intent'])) {
+                $user['intent'] = 'discuter';
+            }
         }
         return $user;
     }
@@ -234,5 +244,71 @@ class User {
             }
         }
         return ['success' => false, 'message' => 'Lien de réinitialisation invalide ou expiré.'];
+    }
+
+    public function updateIntent($userId, $intent) {
+        $allowedIntents = ['discuter', 'aider', 'besoin_aide'];
+        if (!in_array($intent, $allowedIntents)) {
+            return ['success' => false, 'message' => 'Intention invalide.'];
+        }
+
+        $stmt = $this->pdo->prepare("UPDATE users SET intent = ? WHERE id = ?");
+        if ($stmt->execute([$intent, $userId])) {
+            return ['success' => true, 'message' => 'Intention mise à jour.'];
+        }
+        return ['success' => false, 'message' => 'Erreur lors de la mise à jour de l\'intention.'];
+    }
+
+    private function getClientIP() {
+        $ipKeys = ['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'REMOTE_ADDR'];
+        foreach ($ipKeys as $key) {
+            if (!empty($_SERVER[$key])) {
+                $ip = $_SERVER[$key];
+                // Handle comma-separated list (X-Forwarded-For can have multiple IPs)
+                if (strpos($ip, ',') !== false) {
+                    $ip = trim(explode(',', $ip)[0]);
+                }
+                if (filter_var($ip, FILTER_VALIDATE_IP)) {
+                    return $ip;
+                }
+            }
+        }
+        return $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    }
+
+    public function resendVerificationEmail($email) {
+        $emailHash = hash('sha256', $email);
+        $stmt = $this->pdo->prepare("SELECT id, email_verified FROM users WHERE email_hash = ?");
+        $stmt->execute([$emailHash]);
+        $user = $stmt->fetch();
+
+        if (!$user) {
+            // Don't reveal if email exists or not
+            return ['success' => true, 'message' => 'Si cette adresse existe, un email de vérification a été envoyé.'];
+        }
+
+        if ($user['email_verified']) {
+            return ['success' => false, 'message' => 'Cet email est déjà vérifié. Vous pouvez vous connecter.'];
+        }
+
+        // Generate new verification token
+        $verificationToken = bin2hex(random_bytes(32));
+        $verificationExpires = date('Y-m-d H:i:s', strtotime('+24 hours'));
+
+        $stmt = $this->pdo->prepare("UPDATE users SET verification_token = ?, verification_expires = ? WHERE id = ?");
+        
+        if ($stmt->execute([$verificationToken, $verificationExpires, $user['id']])) {
+            // Send verification email
+            $emailService = new Email();
+            $emailSent = $emailService->sendVerificationEmail($email, $verificationToken);
+            
+            if ($emailSent) {
+                return ['success' => true, 'message' => 'Un nouvel email de vérification a été envoyé.'];
+            } else {
+                return ['success' => false, 'message' => 'Erreur lors de l\'envoi de l\'email. Réessayez plus tard.'];
+            }
+        }
+        
+        return ['success' => false, 'message' => 'Une erreur s\'est produite. Veuillez réessayer.'];
     }
 }

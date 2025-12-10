@@ -44,13 +44,30 @@ class Chat {
             $stmt = $this->pdo->prepare("UPDATE users SET status = 'searching' WHERE id = ?");
             $stmt->execute([$userId]);
 
+            // Get current user's intent
+            $stmt = $this->pdo->prepare("SELECT intent FROM users WHERE id = ?");
+            $stmt->execute([$userId]);
+            $userIntent = $stmt->fetchColumn();
+
+            // Determine target intent
+            $targetIntent = '';
+            if ($userIntent === 'discuter') {
+                $targetIntent = 'discuter';
+            } elseif ($userIntent === 'aider') {
+                $targetIntent = 'besoin_aide';
+            } elseif ($userIntent === 'besoin_aide') {
+                $targetIntent = 'aider';
+            }
+
             // Select a user who is searching and not me
+            // AND who has the matching intent
             // AND who I have not blocked
             // AND who has not blocked me
             // FOR UPDATE to lock the row
             $sql = "
                 SELECT id FROM users 
                 WHERE status = 'searching' 
+                AND intent = ?
                 AND id != ? 
                 AND id NOT IN (SELECT blocked_user_id FROM blocked_users WHERE user_id = ?)
                 AND id NOT IN (SELECT user_id FROM blocked_users WHERE blocked_user_id = ?)
@@ -58,7 +75,7 @@ class Chat {
             ";
             
             $stmt = $this->pdo->prepare($sql);
-            $stmt->execute([$userId, $userId, $userId]);
+            $stmt->execute([$targetIntent, $userId, $userId, $userId]);
             $partner = $stmt->fetch();
 
             if ($partner) {
@@ -132,10 +149,37 @@ class Chat {
         return ['success' => true];
     }
 
-    public function reportUser($reporterId, $reportedId, $reason) {
+    public function reportUser($reporterId, $reportedId, $reason, $chatId = null) {
         $encryptedReason = $this->encryption->encrypt($reason);
-        $stmt = $this->pdo->prepare("INSERT INTO reports (reporter_id, reported_id, reason) VALUES (?, ?, ?)");
-        return $stmt->execute([$reporterId, $reportedId, $encryptedReason]);
+        
+        // Get conversation snapshot if chatId is provided
+        $conversationSnapshot = null;
+        if ($chatId) {
+            $messages = $this->getAllChatMessages($chatId);
+            if (!empty($messages)) {
+                $conversationSnapshot = $this->encryption->encrypt(json_encode($messages, JSON_UNESCAPED_UNICODE));
+            }
+        }
+        
+        $stmt = $this->pdo->prepare("INSERT INTO reports (reporter_id, reported_id, reason, conversation_snapshot, chat_id) VALUES (?, ?, ?, ?, ?)");
+        return $stmt->execute([$reporterId, $reportedId, $encryptedReason, $conversationSnapshot, $chatId]);
+    }
+    
+    public function getAllChatMessages($chatId) {
+        $stmt = $this->pdo->prepare("SELECT m.*, u.username FROM messages m JOIN users u ON m.sender_id = u.id WHERE m.chat_id = ? ORDER BY m.id ASC");
+        $stmt->execute([$chatId]);
+        $messages = $stmt->fetchAll();
+        
+        $result = [];
+        foreach ($messages as $msg) {
+            $result[] = [
+                'sender_id' => $msg['sender_id'],
+                'sender_name' => $this->encryption->decrypt($msg['username']),
+                'content' => $this->encryption->decrypt($msg['content']),
+                'created_at' => $msg['created_at']
+            ];
+        }
+        return $result;
     }
     
     public function blockUser($userId, $blockedUserId) {

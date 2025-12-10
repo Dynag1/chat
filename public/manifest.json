@@ -1,9 +1,11 @@
 {
   "name": "Atypi Chat",
-  "short_name": "Atypi Chat",
-  "start_url": "./index.php",
-  "scope": "./",
+  "short_name": "Atypi",
+  "description": "Discutez avec des inconnus de manière anonyme et sécurisée",
+  "start_url": ".",
+  "scope": ".",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#dfe6e9",
   "theme_color": "#6c5ce7",
   "orientation": "portrait-primary",
@@ -18,5 +20,6 @@
       "sizes": "512x512",
       "type": "image/png"
     }
-  ]
+  ],
+  "prefer_related_applications": false
 }

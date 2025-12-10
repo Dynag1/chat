@@ -19,7 +19,8 @@ class Admin {
             SELECT r.*, 
                    u1.username as reporter_username, 
                    u2.username as reported_username,
-                   u2.is_blocked as reported_is_blocked
+                   u2.is_blocked as reported_is_blocked,
+                   u2.registration_ip as reported_ip
             FROM reports r
             JOIN users u1 ON r.reporter_id = u1.id
             JOIN users u2 ON r.reported_id = u2.id
@@ -32,6 +33,14 @@ class Admin {
             $report['reporter_username'] = $this->encryption->decrypt($report['reporter_username']);
             $report['reported_username'] = $this->encryption->decrypt($report['reported_username']);
             $report['reason'] = $this->encryption->decrypt($report['reason']);
+            
+            // Decrypt conversation snapshot if present
+            if (!empty($report['conversation_snapshot'])) {
+                $decrypted = $this->encryption->decrypt($report['conversation_snapshot']);
+                $report['conversation'] = json_decode($decrypted, true) ?: [];
+            } else {
+                $report['conversation'] = [];
+            }
         }
 
         return $reports;

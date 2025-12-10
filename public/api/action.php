@@ -55,6 +55,7 @@ try {
             
             $reportedId = filter_var($input['reported_id'], FILTER_VALIDATE_INT);
             $reason = Security::sanitizeInput($input['reason']);
+            $chatId = isset($input['chat_id']) ? filter_var($input['chat_id'], FILTER_VALIDATE_INT) : null;
             
             if (!$reportedId || empty($reason)) {
                 http_response_code(400);
@@ -69,7 +70,7 @@ try {
                 exit;
             }
             
-            if ($chat->reportUser($userId, $reportedId, $reason)) {
+            if ($chat->reportUser($userId, $reportedId, $reason, $chatId)) {
                 echo json_encode(['success' => true, 'message' => 'User reported successfully.']);
             } else {
                 http_response_code(500);

@@ -119,7 +119,7 @@ nextBtn.addEventListener('click', () => {
                     messagesDiv.innerHTML = '<div class="system-message">En attente d\'un partenaire...</div>';
                     setTimeout(() => {
                         retryMatch();
-                    }, 2000);
+                    }, 3000);
                 } else if (data.message) {
                     messagesDiv.innerHTML = `<div class="system-message" style="color:red">Erreur : ${data.message}</div>`;
                     isSearching = false;
@@ -128,7 +128,7 @@ nextBtn.addEventListener('click', () => {
                 } else {
                     setTimeout(() => {
                         retryMatch();
-                    }, 2000);
+                    }, 3000);
                 }
             }
         })
@@ -158,7 +158,7 @@ function retryMatch() {
                 startChat(data.chat_id, data.partner_id);
                 sendNotification("Nouveau partenaire trouvé !", "Vous discutez maintenant avec un inconnu.");
             } else {
-                setTimeout(retryMatch, 2000);
+                setTimeout(retryMatch, 3000);
             }
         });
 }
@@ -312,12 +312,13 @@ reportBtn.addEventListener('click', () => {
         body: JSON.stringify({
             reported_id: partnerId,
             reason: reason,
+            chat_id: currentChatId,
             csrf_token: csrfToken
         })
     })
         .then(res => res.json())
         .then(data => {
-            alert("Utilisateur signalé.");
+            alert("Utilisateur signalé. La conversation a été enregistrée pour examen.");
             // Don't automatically skip, let them decide to block or leave
         });
 });
